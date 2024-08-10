@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -40,7 +39,6 @@ func main() {
 	chunks := make(chan []byte)
 	wg := sync.WaitGroup{}
 
-	// Start file reading goroutine
 	go func() {
 		err := readFileInChunks("./data/measurements.txt", chunks)
 		if err != nil {
@@ -52,26 +50,22 @@ func main() {
 		log.Println("file read")
 	}()
 
-	// Start worker goroutines
 	for i := 0; i < numCPUs; i++ {
 		wg.Add(1)
 		go worker(results, chunks, &wg)
 	}
 
-	// Start a goroutine to close results channel when all workers are done
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
 	finalResult := make(map[string]StationData, 10000)
-	// Process results as they come in
 	for result := range results {
 		for station, data := range result {
 			if existing, ok := finalResult[station]; !ok {
 				finalResult[station] = data
 			} else {
-				// Calculate the weighted mean
 				total_count := existing[3] + data[3]
 				finalResult[station] = StationData{
 					min(existing[0], data[0]),
@@ -83,7 +77,6 @@ func main() {
 		}
 	}
 
-	// Create a slice of station names for sorting
 	stations := make([]string, 0, len(finalResult))
 	for station := range finalResult {
 		stations = append(stations, station)
@@ -190,11 +183,7 @@ func processLine(results map[string]StationData, line []byte) {
 				data[1] = max(data[1], floatVal)
 				data[2] = (data[2]*data[3] + floatVal) / (data[3] + 1)
 				data[3]++
-				for i := range data[:3] {
-					if data[i] == -0.0 {
-						data[i] = 0.0
-					}
-				}
+
 				results[stationName] = data
 			}
 			return
@@ -203,12 +192,11 @@ func processLine(results map[string]StationData, line []byte) {
 
 }
 
-func round(x float64) float64 {
-	return math.Round(x*10) / 10
-}
+// func round(x float64) float64 {
+// 	return math.Round(x*10) / 10
+// }
 
 func parseFloatBytesAlt(b []byte) float64 {
-	// Check if negative
 	sign := float64(1)
 	start := 0
 	if b[0] == '-' {
@@ -218,10 +206,12 @@ func parseFloatBytesAlt(b []byte) float64 {
 
 	var result float64
 
-	if len(b)-start == 3 { // X.X format
+	if len(b)-start == 3 {
+		// X.X format
 		result = sign * (float64(b[start]-'0') + float64(b[start+2]-'0')*0.1)
-	} else { // XX.X format
+	} else {
+		// XX.X format
 		result = sign * (float64(b[start]-'0')*10 + float64(b[start+1]-'0') + float64(b[start+3]-'0')*0.1)
 	}
-	return round(result)
+	return result
 }
